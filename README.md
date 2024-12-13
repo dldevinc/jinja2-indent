@@ -26,13 +26,7 @@ The `{% indent %}` tag provided by this extension allows you to adjust the inden
 
 The following example demonstrates how to increase the indentation of a block of text:
 
-```python
-from jinja2 import Environment
-from jinja2_indent import IndentExtension
-
-env = Environment(extensions=[IndentExtension])
-
-template_str = """
+```jinja2
 root:
 {% indent 2 %}
 - name: a
@@ -44,11 +38,6 @@ root:
 - name: c
   value: 3
 {% endindent %}
-"""
-
-template = env.from_string(template_str)
-output = template.render()
-print(output)
 ```
 
 ```
@@ -65,13 +54,7 @@ root:
 
 The following example demonstrates how to remove unnecessary indentation from a block of text:
 
-```python
-from jinja2 import Environment
-from jinja2_indent import IndentExtension
-
-env = Environment(extensions=[IndentExtension])
-
-template_str = """
+```jinja2
 - name: a
   value: 1
 
@@ -82,11 +65,6 @@ template_str = """
 
 - name: c
   value: 3
-"""
-
-template = env.from_string(template_str)
-output = template.render()
-print(output)
 ```
 
 ```
