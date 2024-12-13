@@ -1,6 +1,6 @@
 from jinja2 import Environment
 
-from jinja2_indentation import IndentationExtension
+from jinja2_indent import IndentationExtension
 
 
 class TestExtension:
