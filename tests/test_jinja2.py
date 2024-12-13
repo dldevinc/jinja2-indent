@@ -1,11 +1,11 @@
 from jinja2 import Environment
 
-from jinja2_indent import IndentationExtension
+from jinja2_indent import IndentExtension
 
 
 class TestExtension:
     def setup_method(self):
-        self.env = Environment(extensions=[IndentationExtension])
+        self.env = Environment(extensions=[IndentExtension])
 
     def test_one_line(self):
         template = self.env.from_string("{% indent 4 %}value: 1{% endindent %}")
