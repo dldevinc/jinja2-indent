@@ -1,0 +1,50 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+
+jobs:
+  tests:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - 3.9
+          - "3.10"
+          - "3.11"
+          - "3.12"
+          - "3.13"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install pipx
+        run: pip install pipx
+
+      - name: Install poetry
+        run: pipx install poetry
+
+      - name: Install dependencies
+        run: poetry install
+
+      - name: Install nox
+        run: pipx install nox
+
+      - name: Run nox tests against python-${{ matrix.python-version }}
+        run: nox -R -t test
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html-${{ matrix.python-version }}
+          path: htmlcov/

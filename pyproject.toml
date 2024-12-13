@@ -1,0 +1,88 @@
+[tool.poetry]
+name = "jinja2-indent"
+version = "0.1.0"
+description = "A Jinja2 extension for managing indentation in templates."
+authors = ["Mihail Mishakin <x896321475@gmail.com>"]
+maintainers = ["Mihail Mishakin <x896321475@gmail.com>"]
+readme = "README.md"
+license = "MIT"
+classifiers = [
+    "Operating System :: OS Independent",
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+packages = [
+    { include = "jinja2_indent" },
+]
+
+[tool.poetry.urls]
+repository = "https://github.com/dldevinc/jinja2-indent"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+jinja2 = "^3.0.0"
+jinja2-simple-tags = "^0.6.1"
+
+[tool.poetry.group.pytest]
+optional = true
+
+[tool.poetry.group.pytest.dependencies]
+pytest = "^8.3.4"
+pytest-xdist = "^3.6.1"
+pytest-cov = "*"
+
+[tool.isort]
+extend_skip = [".md", ".json"]
+line_length = 90
+known_first_party = ["jinja2_indent"]
+multi_line_output = 5
+
+[tool.flake8]
+max-line-length = 90
+extend-exclude = [
+    "tests",
+]
+per-file-ignores = [
+    "__init__.py: F401",    # imported but unused
+    "apps.py: F401",        # imported but unused
+]
+extend-ignore = [
+    # "E501",               # line too long
+    "E128",                 # continuation line under-indented for visual indent
+]
+
+[tool.pytest.ini_options]
+addopts = "--showlocals -rf -s"
+norecursedirs = [
+    "*.egg",
+    ".*",
+    "_darcs",
+    "build",
+    "CVS",
+    "dist",
+    "node_modules",
+    "venv",
+    ".venv",
+    "{arch}",
+    "__pycache__",
+]
+
+[tool.coverage.run]
+source = [
+    "jinja2_indent/",
+]
+omit = [
+    "*/tests/*",
+]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

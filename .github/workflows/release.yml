@@ -1,0 +1,34 @@
+name: Deploy
+
+on:
+  push:
+    tags:
+      - "v*.[0-9]"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pipx
+        run: pip install pipx
+
+      - name: Install poetry
+        run: pipx install poetry
+
+      - name: Install dependencies
+        run: poetry install
+
+      - name: Build wheel and sdist
+        run: poetry build
+
+      - name: Publish package distributions to PyPI
+        env:
+          POETRY_PYPI_TOKEN_PYPI: ${{ secrets.PYPI_TOKEN }}
+        run: poetry publish
