@@ -32,9 +32,9 @@ from jinja2_indent import IndentExtension
 
 env = Environment(extensions=[IndentExtension])
 
-template = env.from_string("""
+template_str = """
 root:
-{% indent 4 %}
+{% indent 2 %}
 - name: a
   value: 1
 
@@ -44,22 +44,23 @@ root:
 - name: c
   value: 3
 {% endindent %}
-""")
+"""
 
+template = env.from_string(template_str)
 output = template.render()
 print(output)
 ```
 
 ```
 root:
-    - name: a
-      value: 1
+  - name: a
+    value: 1
 
-    - name: b
-      value: 2
+  - name: b
+    value: 2
 
-    - name: c
-      value: 3
+  - name: c
+    value: 3
 ```
 
 The following example demonstrates how to remove unnecessary indentation from a block of text:
@@ -70,7 +71,7 @@ from jinja2_indent import IndentExtension
 
 env = Environment(extensions=[IndentExtension])
 
-template = env.from_string("""
+template_str = """
 - name: a
   value: 1
 
@@ -81,8 +82,9 @@ template = env.from_string("""
 
 - name: c
   value: 3
-""")
+"""
 
+template = env.from_string(template_str)
 output = template.render()
 print(output)
 ```
