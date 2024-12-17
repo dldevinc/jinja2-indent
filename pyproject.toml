@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "jinja2-indent"
-version = "0.2.0"
+version = "0.3.0"
 description = "A Jinja2 extension for managing indentation in templates."
 authors = ["Mihail Mishakin <x896321475@gmail.com>"]
 maintainers = ["Mihail Mishakin <x896321475@gmail.com>"]
