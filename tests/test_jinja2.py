@@ -44,3 +44,25 @@ class TestExtension:
             "- name: c\n"
             "  value: 3"
         )
+
+    def test_keep_first_newline(self):
+        # fmt: off
+        template = self.env.from_string(
+            "- name: a\n"
+            "  value: 1\n"
+            "{%- if b %}{% indent 0, keep_first_newline=True %}\n"
+            "  - name: b\n"
+            "    value: 2\n"
+            "{% endindent %}{% endif %}\n"
+            "- name: c\n"
+            "  value: 3\n"
+        )
+        assert template.render({"b": True}) == (
+            "- name: a\n"
+            "  value: 1\n"
+            "- name: b\n"
+            "  value: 2\n"
+            "- name: c\n"
+            "  value: 3"
+        )
+        # fmt: on

@@ -15,12 +15,13 @@ class IndentExtension(ContainerTag):
 
     tags = {"indent"}
 
-    def render(self, width: int, caller=None):
+    def render(self, width: int, keep_first_newline: bool = False, caller=None):
         """
         Render the content with adjusted indentation.
 
         Parameters:
         - width (int): Target indentation width.
+        - keep_first_newline (bool, optional): Whether to keep the first newline.
         - caller (callable): A callable that provides the content to process.
 
         Returns:
@@ -28,8 +29,9 @@ class IndentExtension(ContainerTag):
         """
         content = caller()
 
-        # Strip
-        content = re_initial_newline.sub("", content)
+        # Strip first newline
+        if not keep_first_newline:
+            content = re_initial_newline.sub("", content)
 
         # Split lines and expand tabs to spaces
         lines = split_and_expand_tabs(content)

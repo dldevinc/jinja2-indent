@@ -1,6 +1,4 @@
-from jinja2_indent.extension import (
-    adjust_lines, get_indentation, split_and_expand_tabs
-)
+from jinja2_indent.extension import adjust_lines, get_indentation, split_and_expand_tabs
 
 
 class TestSplitAndExpandTabs:
