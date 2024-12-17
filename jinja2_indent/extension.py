@@ -4,7 +4,6 @@ from typing import Generator
 
 from jinja2_simple_tags import ContainerTag
 
-re_initial_newline = re.compile(r"^\r?\n")
 re_leading_spaces = re.compile(r"^([\s\t]*)(.*)")
 
 
@@ -15,13 +14,14 @@ class IndentExtension(ContainerTag):
 
     tags = {"indent"}
 
-    def render(self, width: int, keep_first_newline: bool = False, caller=None):
+    def render(self, target_indent: int, smart_ltrim: bool = True, first_line_indent: int = None, caller=None):
         """
         Render the content with adjusted indentation.
 
         Parameters:
-        - width (int): Target indentation width.
-        - keep_first_newline (bool, optional): Whether to keep the first newline.
+        - target_indent (int): Target indentation width.
+        - smart_ltrim (bool, optional): Whether to skip leading empty lines.
+        - first_line_indent (int, optional): Number of spaces for the first line's indentation.
         - caller (callable): A callable that provides the content to process.
 
         Returns:
@@ -29,50 +29,50 @@ class IndentExtension(ContainerTag):
         """
         content = caller()
 
-        # Strip first newline
-        if not keep_first_newline:
-            content = re_initial_newline.sub("", content)
+        if first_line_indent is None:
+            first_line_indent = target_indent
 
         # Split lines and expand tabs to spaces
         lines = split_and_expand_tabs(content)
 
-        # Get current indentation level
+        # Determine the current indentation level
         current_indentation = get_indentation(lines)
 
         # Calculate the shift needed for the desired indentation
-        shift = max(-current_indentation, width - current_indentation)
+        shift = max(-current_indentation, target_indent - current_indentation)
+        first_line_shift = max(-current_indentation, first_line_indent - current_indentation)
 
-        # Adjust lines and join them back together
-        adjusted_lines = adjust_lines(lines, shift)
+        # Apply indentation adjustments
+        adjusted_lines = adjust_lines(lines, shift, first_line_shift=first_line_shift)
+
+        # Optionally skip leading empty lines
+        if smart_ltrim:
+            adjusted_lines = itertools.dropwhile(lambda line: not line.strip(), adjusted_lines)
+
         return "\n".join(adjusted_lines)
 
 
-def split_and_expand_tabs(text: str, tabsize: int = 4) -> list[str]:
+def split_and_expand_tabs(text: str, tab_size: int = 4) -> list[str]:
     """
-    Splits the given text into lines, preserving leading whitespace
-    and replacing tabs with spaces.
+    Split the text into lines while replacing tabs with spaces.
 
     Parameters:
     - text (str): The input text to be split into lines.
-    - tabsize (int, optional): The number of spaces to replace
-        each tab character with. Default is 4.
+    - tab_size (int, optional): Number of spaces for each tab. Default is 4.
 
     Returns:
-    - list[str]: A list of lines with tabs replaced by the specified number
-        of spaces, while maintaining the leading whitespace of each line.
+    - list[str]: Lines with tabs replaced by spaces, preserving leading whitespace.
     """
     lines = []
     for line in text.splitlines():
         match = re_leading_spaces.match(line)
 
-        # Extract the leading whitespace characters (spaces and tabs)
+        # Extract leading whitespace and content
         leading_spaces = match.group(1)
+        line_content = match.group(2)
 
-        # Extract the remaining content of the line
-        content = match.group(2)
-
-        # Replace all tabs with spaces, according to the specified tabsize
-        lines.append(leading_spaces.expandtabs(tabsize) + content)
+        # Replace tabs with spaces in the leading whitespace
+        lines.append(leading_spaces.expandtabs(tab_size) + line_content)
 
     return lines
 
@@ -107,13 +107,14 @@ def get_indentation(lines: list[str]) -> int:
     return indentation if indentation != float("inf") else 0
 
 
-def adjust_lines(lines: list[str], shift: int) -> Generator[str, None, None]:
+def adjust_lines(lines: list[str], shift: int, first_line_shift: int = None) -> Generator[str, None, None]:
     """
     Adjust the indentation of each line by adding or removing spaces.
 
     Parameters:
     - lines (list[str]): A list of strings to adjust.
-    - shift (int): The number of spaces to add (if positive) or remove (if negative).
+    - shift (int): Spaces to add (positive) or remove (negative).
+    - first_line_shift (int, optional): Shift value for the first line.
 
     Yields:
     - str: The adjusted lines with modified indentation.
@@ -121,14 +122,26 @@ def adjust_lines(lines: list[str], shift: int) -> Generator[str, None, None]:
     if not lines:
         return
 
-    if not shift:
-        yield from lines
-        return
+    first_line_processed = False
+    if first_line_shift is None:
+        first_line_shift = shift
 
     for line in lines:
         if not line:
             yield line
-        elif shift > 0:
-            yield " " * shift + line
+            continue
+
+        if not first_line_processed:
+            yield from _adjust_line(line, first_line_shift)
+            first_line_processed = True
         else:
-            yield line[-shift:]
+            yield from _adjust_line(line, shift)
+
+
+def _adjust_line(line: str, shift: int) -> str:
+    if shift == 0:
+        yield line
+    elif shift > 0:
+        yield " " * shift + line
+    else:
+        yield line[-shift:]

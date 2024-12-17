@@ -23,4 +23,4 @@ def flake8(session):
 def pytest(session):
     session.install("poetry")
     session.run_install("poetry", "install", "--with", "pytest")
-    session.run("poetry", "run", "pytest", "--cov", "--cov-report", "html")
+    session.run("poetry", "run", "pytest", "--cov", "--cov-report", "html", *session.posargs)
