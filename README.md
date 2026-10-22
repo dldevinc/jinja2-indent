@@ -4,7 +4,7 @@ A Jinja2 extension for managing indentation in templates.
 
 [![PyPI](https://img.shields.io/pypi/v/jinja2-indent)](https://pypi.org/project/jinja2-indent/)
 [![Python](https://img.shields.io/pypi/pyversions/jinja2-indent)](https://pypi.org/project/jinja2-indent/)
-[![Build Status](https://github.com/dldevinc/jinja2-indent/actions/workflows/tests.yml/badge.svg)](https://github.com/dldevinc/jinja2-indent)
+[![Build Status](https://github.com/dldevinc/jinja2-indent/actions/workflows/tests.yml/badge.svg)](https://github.com/dldevinc/jinja2-indent/actions/workflows/tests.yml)
 [![License](https://img.shields.io/pypi/l/jinja2-indent)](https://github.com/dldevinc/jinja2-indent/blob/master/LICENSE)
 
 ## Compatibility
