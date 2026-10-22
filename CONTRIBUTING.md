@@ -24,15 +24,15 @@
    ```
 1. Install python dependencies:
    ```shell
-   poetry install
+   poetry install --with pytest
    ```
 
 ### Formatting
 
-To run `black`, `isort` and `flake8`:
+To run `ruff`:
 
 ```shell
-nox -Rt style fix
+nox -Rs ruff
 ```
 
 ### Testing
@@ -40,5 +40,5 @@ nox -Rt style fix
 To run unit tests:
 
 ```shell
-nox -Rt test
+nox -Rs pytest
 ```

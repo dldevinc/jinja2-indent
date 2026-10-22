@@ -1,26 +1,62 @@
 import nox
 
 
-@nox.session(tags=["style", "fix"])
-def black(session):
-    session.install("black")
-    session.run("black", "jinja2_indent", "tests")
+@nox.session(tags=["dev"])
+def ruff(session: nox.Session) -> None:
+    """Fix lint issues and format source code."""
+    session.install("ruff")
+    paths = session.posargs or ["jinja2_indent"]
+    session.run("ruff", "check", "--fix", *paths)
+    session.run("ruff", "format", *paths)
 
 
-@nox.session(tags=["style", "fix"])
-def isort(session):
-    session.install("isort")
-    session.run("isort", "jinja2_indent", "tests")
+@nox.session(tags=["ci"])
+def ruff_ci(session: nox.Session) -> None:
+    """Check lint and formatting without modifying files."""
+    session.install("ruff")
+    paths = session.posargs or ["jinja2_indent"]
+    session.run("ruff", "check", *paths)
+    session.run("ruff", "format", "--check", *paths)
 
 
-@nox.session(tags=["style"])
-def flake8(session):
-    session.install("flake8", "flake8-pyproject")
-    session.run("flake8", "jinja2_indent")
+@nox.session(tags=["dev"])
+def pytest(session: nox.Session) -> None:
+    """Run tests with an HTML coverage report."""
+    session.run(
+        "poetry",
+        "install",
+        "--with",
+        "pytest",
+        external=True,
+        env={"POETRY_VIRTUALENVS_CREATE": "false"},
+    )
+
+    session.run(
+        "pytest",
+        "--cov=jinja2_indent",
+        "--cov-report=term-missing",
+        "--cov-report=html",
+        *session.posargs,
+    )
 
 
-@nox.session(tags=["test"])
-def pytest(session):
-    session.install("poetry")
-    session.run_install("poetry", "install", "--with", "pytest")
-    session.run("poetry", "run", "pytest", "--cov", "--cov-report", "html", *session.posargs)
+@nox.session(tags=["ci"])
+def pytest_ci(session: nox.Session) -> None:
+    """Run tests with CI-friendly coverage output."""
+    session.run(
+        "poetry",
+        "install",
+        "--with",
+        "pytest",
+        external=True,
+        env={"POETRY_VIRTUALENVS_CREATE": "false"},
+    )
+
+    session.run(
+        "pytest",
+        "--cov=jinja2_indent",
+        "--cov-report=term-missing",
+        "--cov-report=html",
+        "--cov-report=xml:coverage.xml",
+        *session.posargs,
+    )

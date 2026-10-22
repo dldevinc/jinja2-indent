@@ -1,14 +1,16 @@
 # jinja2-indent
 
-This Jinja2 extension adjusts the indentation of block content to a specified width.
+A Jinja2 extension for managing indentation in templates.
 
-[![PyPI](https://img.shields.io/pypi/v/jinja2-indent.svg)](https://pypi.org/project/jinja2-indent/)
+[![PyPI](https://img.shields.io/pypi/v/jinja2-indent)](https://pypi.org/project/jinja2-indent/)
+[![Python](https://img.shields.io/pypi/pyversions/jinja2-indent)](https://pypi.org/project/jinja2-indent/)
 [![Build Status](https://github.com/dldevinc/jinja2-indent/actions/workflows/tests.yml/badge.svg)](https://github.com/dldevinc/jinja2-indent)
-[![Software license](https://img.shields.io/pypi/l/jinja2-indent.svg)](https://pypi.org/project/jinja2-indent/)
+[![License](https://img.shields.io/pypi/l/jinja2-indent)](https://github.com/dldevinc/jinja2-indent/blob/master/LICENSE)
 
 ## Compatibility
 
--   `python` >= 3.9
+- `python` >= 3.10
+- `jinja2` >= 3.1
 
 ## Installation
 
@@ -20,54 +22,75 @@ pip install jinja2-indent
 
 ## Usage
 
-The `{% indent %}` tag provided by this extension allows you to adjust the indentation level of the content inside the tag block. You can specify the desired width (in spaces), and the extension will reformat the content accordingly. This is particularly useful for aligning nested or indented structures in templates.
+Add the extension to your Jinja2 environment:
 
-### Example
+```python
+from jinja2 import Environment
+from jinja2_indent import IndentExtension
 
-The following example demonstrates how to increase the indentation of a block of text:
+env = Environment(extensions=[IndentExtension])
+```
 
-```jinja2
+### `{% indent %}` tag
+
+The tag adjusts the base indentation of the block content to the target
+column. Relative offsets between lines are preserved: a line that was
+indented N columns more than the current base indent stays N columns
+more than the new base indent.
+
+The argument can be:
+
+- an integer — an absolute target column (`{% indent 4 %}`);
+- a quoted string `"+N"` / `"-N"` — a shift relative to the current
+base indent (`{% indent "+2" %}`).
+
+An unquoted `-2` is an absolute (and therefore invalid) target: use
+`"-2"` for a relative shift.
+
+Only leading whitespace is affected. Blank and whitespace-only lines
+are stripped of leading spaces and tabs, so increasing the indentation
+never adds trailing whitespace to empty lines.
+
+#### Increasing indentation
+
+```jinja
 root:
-{% indent 2 %}
+{% indent 2 -%}
 - name: a
   value: 1
-
 - name: b
   value: 2
-
 - name: c
   value: 3
-{% endindent %}
+{%- endindent %}
 ```
 
-```
+```yaml
 root:
   - name: a
     value: 1
-
   - name: b
     value: 2
-
   - name: c
     value: 3
 ```
 
-The following example demonstrates how to remove unnecessary indentation from a block of text:
+#### Removing indentation (relative shift)
 
 ```jinja2
 - name: a
   value: 1
 
-{% indent 0 %}
+{% if need_b %}{% indent "-2" -%}
   - name: b
     value: 2
-{% endindent %}
+{%- endindent %}{% endif %}
 
 - name: c
   value: 3
 ```
 
-```
+```yaml
 - name: a
   value: 1
 
@@ -76,4 +99,96 @@ The following example demonstrates how to remove unnecessary indentation from a 
 
 - name: c
   value: 3
+```
+
+#### Real-world example
+
+```jinja2
+services:
+  {%- for name, service in services.items() %}{% indent "-2" %}
+    {{ name }}:
+      image: {{ service.image }}
+      {%- if service.ports %}{% indent "-2" %}
+        ports:
+          {%- for port in service.ports %}
+          - {{ port }}
+          {%- endfor %}
+      {%- endindent %}{% endif %}
+  {%- endindent %}{% endfor %}
+
+networks:
+  default:
+    name: {{ network_name }}
+```
+
+With
+
+```python
+context = {
+    "services": {
+        "web": {"image": "nginx:1.27", "ports": [80, 443]},
+        "worker": {"image": "worker:latest", "ports": []},
+    },
+    "network_name": "app-net",
+}
+```
+
+the template renders to:
+
+```yaml
+services:
+  web:
+    image: nginx:1.27
+    ports:
+      - 80
+      - 443
+  worker:
+    image: worker:latest
+
+networks:
+  default:
+    name: app-net
+```
+
+### `nindent` filter
+
+A Helm-style filter: prepends a newline and indents every non-blank
+line by the given number of spaces. The first line is always indented;
+blank lines are not.
+
+This is handy together with Jinja2's whitespace control:
+
+```jinja
+key:
+  {{- "- a\n- b" | nindent(2) }}
+```
+
+```
+key:
+  - a
+  - b
+```
+
+## Tab size
+
+The `{% indent %}` tag accepts an optional `tab_size` argument, which
+controls how a leading tab is expanded to columns when computing the
+current indentation. It defaults to `4` and is only relevant for
+templates that use tabs for indentation; space-only templates do not
+need it.
+
+```jinja
+{% indent "-4", tab_size=8 -%}
+	- name: a
+{%- endindent %}
+```
+
+When the tag is used many times in a template, repeating `tab_size` is
+inconvenient. Set the `indent__tab_size` template variable once instead:
+
+```jinja
+{% set indent__tab_size = 8 %}
+{% indent "-4" -%}
+	- name: a
+{%- endindent %}
 ```

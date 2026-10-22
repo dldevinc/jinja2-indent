@@ -1,147 +1,261 @@
-import itertools
 import re
-from typing import Generator
 
+from collections.abc import Iterable, Iterator
+
+from jinja2.filters import do_indent
 from jinja2_simple_tags import ContainerTag
 
-re_leading_spaces = re.compile(r"^([\s\t]*)(.*)")
+
+_INDENT_ARG_RE = re.compile(r"^([+-]?)(\d+)$")
 
 
 class IndentExtension(ContainerTag):
-    """
-    A Jinja2 extension for managing indentation in templates.
-    """
-
     tags = {"indent"}
 
-    def render(self, target_indent: int, smart_ltrim: bool = True, first_line_indent: int = None, caller=None):
-        """
-        Render the content with adjusted indentation.
+    # Template variable name to read tab size from.
+    tab_size_var: str = "indent__tab_size"
 
-        Parameters:
-        - target_indent (int): Target indentation width.
-        - smart_ltrim (bool, optional): Whether to skip leading empty lines.
-        - first_line_indent (int, optional): Number of spaces for the first line's indentation.
-        - caller (callable): A callable that provides the content to process.
+    # Fallback tab size when the variable is not set.
+    default_tab_size: int = 4
 
-        Returns:
-        - str: The content with adjusted indentation.
-        """
-        content = caller()
+    def __init__(self, environment):
+        super().__init__(environment)
+        environment.filters["nindent"] = nindent
 
-        if first_line_indent is None:
-            first_line_indent = target_indent
+    def render(self, value: str | int, tab_size: int | None = None, caller=None):
+        if tab_size is None:
+            tab_size = self.context.get(self.tab_size_var, self.default_tab_size)
+        tab_size = resolve_tab_size(tab_size)
 
-        # Split lines and expand tabs to spaces
-        lines = split_and_expand_tabs(content)
+        content = str(caller())
+        lines = content.splitlines(keepends=True)
 
-        # Determine the current indentation level
-        current_indentation = get_indentation(lines)
+        current_indent = get_indentation(lines, tab_size=tab_size)
+        target_indent = resolve_target_indent(value, current_indent)
 
-        # Calculate the shift needed for the desired indentation
-        shift = max(-current_indentation, target_indent - current_indentation)
-        first_line_shift = max(-current_indentation, first_line_indent - current_indentation)
-
-        # Apply indentation adjustments
-        adjusted_lines = adjust_lines(lines, shift, first_line_shift=first_line_shift)
-
-        # Optionally skip leading empty lines
-        if smart_ltrim:
-            adjusted_lines = itertools.dropwhile(lambda line: not line.strip(), adjusted_lines)
-
-        return "\n".join(adjusted_lines)
+        processed_lines = expand_leading_tabs(lines, tab_size=tab_size)
+        processed_lines = reindent(processed_lines, current_indent, target_indent)
+        return "".join(processed_lines)
 
 
-def split_and_expand_tabs(text: str, tab_size: int = 4) -> list[str]:
-    """
-    Split the text into lines while replacing tabs with spaces.
-
-    Parameters:
-    - text (str): The input text to be split into lines.
-    - tab_size (int, optional): Number of spaces for each tab. Default is 4.
-
-    Returns:
-    - list[str]: Lines with tabs replaced by spaces, preserving leading whitespace.
-    """
-    lines = []
-    for line in text.splitlines():
-        match = re_leading_spaces.match(line)
-
-        # Extract leading whitespace and content
-        leading_spaces = match.group(1)
-        line_content = match.group(2)
-
-        # Replace tabs with spaces in the leading whitespace
-        lines.append(leading_spaces.expandtabs(tab_size) + line_content)
-
-    return lines
-
-
-def get_indentation(lines: list[str]) -> int:
-    """
-    Calculate the minimum indentation (number of leading spaces)
-    of non-whitespace lines in a list of strings.
+def nindent(value: str, width: int = 4) -> str:
+    """Add a leading newline and indent non-blank lines, like Helm's ``nindent``.
 
     Args:
-        lines (list[str]): A list of strings to analyze for indentation.
+        value: The value to indent.
+        width: Number of leading spaces to add to each non-blank line,
+            passed to Jinja2's ``indent`` filter.
 
     Returns:
-        int: The minimum indentation of the non-whitespace lines.
-             Returns 0 if all lines are empty or contain only whitespace.
+        ``"\\n"`` followed by ``value`` indented by Jinja2's ``indent``
+        filter with ``first=True`` and ``blank=False``.
     """
-    if not lines:
-        return 0
-
-    indentation = float("inf")
-
-    for line in lines:
-        # Calculate the number of leading spaces in the current line
-        line_indentation = sum(1 for _ in itertools.takewhile(str.isspace, line))
-
-        # Skip whitespace-only lines
-        if line_indentation == len(line):
-            continue
-
-        indentation = min(indentation, line_indentation)
-
-    return indentation if indentation != float("inf") else 0
+    return "\n" + do_indent(value, width=width, first=True, blank=False)
 
 
-def adjust_lines(lines: list[str], shift: int, first_line_shift: int = None) -> Generator[str, None, None]:
+def resolve_tab_size(value: object) -> int:
+    """Validate and normalize the tab size.
+
+    Accepts integers and numeric strings like ``"4"``.
+    The result must be a positive integer.
+
+    Args:
+        value: The raw tab size, typically from the template context.
+
+    Returns:
+        A positive integer tab size.
+
+    Raises:
+        ValueError: If ``value`` is a bool, not an int/numeric string, or
+            not positive.
     """
-    Adjust the indentation of each line by adding or removing spaces.
+    if isinstance(value, bool):
+        raise ValueError(f"tab_size must be a positive integer, got {value!r}")
+    if isinstance(value, int):
+        tab_size = value
+    elif isinstance(value, str):
+        try:
+            tab_size = int(value.strip())
+        except ValueError:
+            raise ValueError(f"tab_size must be a positive integer, got {value!r}") from None
+    else:
+        raise ValueError(f"tab_size must be a positive integer, got {value!r}")
+    if tab_size <= 0:
+        raise ValueError(f"tab_size must be positive, got {tab_size}")
+    return tab_size
 
-    Parameters:
-    - lines (list[str]): A list of strings to adjust.
-    - shift (int): Spaces to add (positive) or remove (negative).
-    - first_line_shift (int, optional): Shift value for the first line.
+
+def resolve_target_indent(value: object, current_indent: int) -> int:
+    """Resolve the ``{% indent ... %}`` argument to a target column.
+
+    An integer (``{% indent 4 %}``) is an absolute target. A string of
+    the form ``"+N"`` or ``"-N"`` (``{% indent "+2" %}``) is a relative
+    shift from ``current_indent``. Relative shifts must be quoted; an
+    unquoted ``-2`` is an absolute (and therefore invalid) target.
+
+    Args:
+        value: The tag argument as parsed by ``ContainerTag``.
+        current_indent: Current base indentation in columns (>= 0).
+
+    Returns:
+        The target indentation in columns. May be negative if a relative
+        shift moves below zero; the caller is responsible for rejecting
+        that.
+
+    Raises:
+        ValueError: If ``value`` is neither an integer nor a string
+            matching ``[+-]?\\d+``.
+    """
+    if isinstance(value, bool):
+        raise ValueError(f"indent tag does not accept booleans: {value!r}")
+    if isinstance(value, int):
+        return value
+    if not isinstance(value, str):
+        raise ValueError(f"indent tag expects an integer or a string like '+N'/'-N', got {value!r}")
+    match = _INDENT_ARG_RE.match(value.strip())
+    if match is None:
+        raise ValueError(f"indent tag expects an integer or a string like '+N'/'-N', got {value!r}")
+    sign, digits = match.groups()
+    n = int(digits)
+    if sign == "+":
+        return current_indent + n
+    if sign == "-":
+        return current_indent - n
+    return n
+
+
+def expand_leading_tabs(lines: Iterable[str], tab_size: int = 4) -> Iterator[str]:
+    """Yield lines with tabs in the leading whitespace expanded to spaces.
+
+    Only leading whitespace (spaces and tabs) before the first
+    non-whitespace character is affected. A tab advances the column
+    to the next multiple of `tab_size`. Line endings are preserved.
+
+    Args:
+        lines: Source lines, with or without line endings.
+        tab_size: Tab width in columns; must be positive.
 
     Yields:
-    - str: The adjusted lines with modified indentation.
+        Lines with expanded leading tabs.
     """
-    if not lines:
-        return
-
-    first_line_processed = False
-    if first_line_shift is None:
-        first_line_shift = shift
+    if tab_size <= 0:
+        raise ValueError(f"tab_size must be positive, got {tab_size}")
 
     for line in lines:
-        if not line:
-            yield line
+        # Find end of the leading whitespace prefix.
+        i = 0
+        n = len(line)
+        while i < n and line[i] in " \t":
+            i += 1
+        prefix, rest = line[:i], line[i:]
+        # str.expandtabs treats the prefix in isolation, which is exactly
+        # the semantics we want: tabs are expanded starting from column 0.
+        yield prefix.expandtabs(tab_size) + rest
+
+
+def get_indentation(lines: Iterable[str], tab_size: int = 4) -> int:
+    """Minimum leading indentation in columns among non-blank lines.
+
+    A leading space is one column; a leading tab advances to the next
+    multiple of `tab_size`. Only whitespace before the first
+    non-whitespace character counts. Blank and whitespace-only lines
+    are ignored. Returns 0 if there are no non-blank lines.
+    """
+    if tab_size <= 0:
+        raise ValueError(f"tab_size must be positive, got {tab_size}")
+
+    return min(
+        (indent_of(line, tab_size) for line in lines if line.strip()),
+        default=0,
+    )
+
+
+def indent_of(line: str, tab_size: int) -> int:
+    """Leading indentation of `line` in columns.
+
+    A leading space is one column; a leading tab advances the column
+    to the next multiple of `tab_size`. Only whitespace before the first
+    non-whitespace character counts. A blank or whitespace-only line
+    yields the indentation of its entire length.
+
+    Args:
+        line: Source line (with or without line ending).
+        tab_size: Tab width in columns; must be positive.
+
+    Returns:
+        Number of leading columns occupied by spaces and tabs.
+    """
+    col = 0
+    for ch in line:
+        if ch == " ":
+            col += 1
+        elif ch == "\t":
+            col += tab_size - col % tab_size
+        else:
+            break
+    return col
+
+
+def reindent(
+    lines: Iterable[str],
+    current_indent: int,
+    target_indent: int,
+) -> Iterator[str]:
+    """Re-align the leading indentation of every line.
+
+    The relative offsets between lines are preserved: a non-blank line
+    that was indented ``x`` columns more than ``current_indent`` becomes
+    indented ``target_indent + (x - current_indent)`` columns. Blank and
+    whitespace-only lines are stripped of their leading spaces and tabs,
+    so increasing the indentation does not add trailing spaces to empty
+    lines.
+
+    Input lines are expected to have already been processed by
+    :func:`expand_leading_tabs`: no line may start with a tab. Output
+    indentation consists of spaces only.
+
+    Args:
+        lines: Source lines, with or without line endings.
+        current_indent: Current base indentation in columns (>= 0).
+            Must not exceed the indentation of any non-blank input line.
+        target_indent: Desired base indentation in columns (>= 0).
+
+    Yields:
+        Re-indented lines with the same line endings as the input.
+
+    Raises:
+        ValueError: If ``current_indent`` or ``target_indent`` is
+            negative, if a leading tab is found (``expand_leading_tabs``
+            was not applied), or if a non-blank line is indented less
+            than ``current_indent``.
+    """
+    if current_indent < 0:
+        raise ValueError(f"current_indent must be >= 0, got {current_indent}")
+    if target_indent < 0:
+        raise ValueError(f"target_indent must be >= 0, got {target_indent}")
+
+    delta = target_indent - current_indent
+
+    for line in lines:
+        if not line.strip(" \t\r\n"):
+            if "\n" in line:
+                yield line.lstrip(" \t")
+            else:
+                yield line
             continue
 
-        if not first_line_processed:
-            yield from _adjust_line(line, first_line_shift)
-            first_line_processed = True
-        else:
-            yield from _adjust_line(line, shift)
+        body = line.rstrip("\r\n")
+        ending = line[len(body) :]
 
+        stripped = body.lstrip(" ")
+        if stripped.startswith("\t"):
+            raise ValueError(f"line starts with a tab; run expand_leading_tabs first: {line!r}")
+        indent = len(body) - len(stripped)
 
-def _adjust_line(line: str, shift: int) -> str:
-    if shift == 0:
-        yield line
-    elif shift > 0:
-        yield " " * shift + line
-    else:
-        yield line[-shift:]
+        if indent < current_indent:
+            raise ValueError(
+                f"line indented {indent} columns, less than current_indent="
+                f"{current_indent}: {line!r}"
+            )
+
+        yield " " * (indent + delta) + stripped + ending
