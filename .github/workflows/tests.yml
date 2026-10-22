@@ -42,7 +42,7 @@ jobs:
         run: pipx install nox
 
       - name: Run nox tests against python-${{ matrix.python-version }}
-        run: nox -t ci -p ${{ matrix.python-version }}
+        run: nox -t ci -P ${{ matrix.python-version }}
 
       - name: Upload coverage report
         if: always()
